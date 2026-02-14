@@ -24,4 +24,4 @@ jobs:
       - name: Send notification
         env:
            PUSHDEER_KEY: ${{ secrets.PUSHDEER_KEY }}
-        run: python scripts/ikuuu.py
+        run: python .scripts/ikuuu.py
