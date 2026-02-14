@@ -1,27 +1,26 @@
-name: PushPlus Notify
+name: PushPlus Notify
 
 on:
-  schedule:
-    # 每天北京时间 11:00 执行
-    # GitHub 用 UTC 时区，北京时间减 8 小时
-    - cron: '0 3 * * *'
-
-  # 允许手动运行（方便测试）
-  workflow_dispatch:
+  schedule:
+    # 每天北京时间 11:00 执行
+    # GitHub 用 UTC 时区，北京时间减 8 小时
+    - cron: '0 3 * * *'
+  # 允许手动运行（方便测试）
+  workflow_dispatch:
 
 jobs:
-  send:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - run: pip install requests
+      - run: pip install requests
 
-      - name: Send notification
-        env:
-           PUSHDEER_KEY: ${{ secrets.PUSHDEER_KEY }}
-        run: python .scripts/ikuuu.py
+      - name: Send notification
+        env:
+          PUSHDEER_KEY: ${{ secrets.PUSHDEER_KEY }}
+        run: python ./scripts/ikuuu.py
