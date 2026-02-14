@@ -23,6 +23,6 @@ jobs:
       - name: Send notification
         env:
           IKUUU_EMAIL: ${{ secrets.IKUUU_EMAIL }}
-            IKUUU_PASSWORD: ${{ secrets.IKUUU_PASSWORD }}  # 多缩进了两个空格，变成子属性
+          IKUUU_PASSWORD: ${{ secrets.IKUUU_PASSWORD }}  # 多缩进了两个空格，变成子属性
           PUSHDEER_KEY: ${{ secrets.PUSHDEER_KEY }}
         run: python ./scripts/ikuuu.py
