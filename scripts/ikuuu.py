@@ -210,26 +210,53 @@ class ikuuu():
             'used_today': '0B',
             'total': '未知'
         }
-        
+
         def extract_from_soup(soup):
             """从BeautifulSoup对象中提取卡片中的流量信息"""
-            # 查找所有卡片
-            card_headers = soup.find_all('div', class_='card-header')
-            for header in card_headers:
-                header_text = header.get_text()
-                card = header.find_parent('div', class_='card')
-                if not card:
+            # 查找所有card-wrap（流量卡片）
+            card_wraps = soup.find_all('div', class_='card-wrap')
+            for card in card_wraps:
+                # 获取卡片标题
+                header = card.find('div', class_='card-header')
+                if not header:
                     continue
-                counter = card.find('span', class_='counter')
-                if not counter:
+                h4 = header.find('h4')
+                if not h4:
                     continue
-                value = counter.get_text().strip()
-                if '剩余流量' in header_text:
-                    traffic_info['remaining'] = value  # 直接使用，通常包含单位
-                elif '今日已用' in header_text:
-                    traffic_info['used_today'] = value
-                # 可扩展其他流量项
-        
+                title = h4.get_text(strip=True)
+
+                # 提取剩余流量
+                if '剩余流量' in title:
+                    body = card.find('div', class_='card-body')
+                    if body:
+                        counter = body.find('span', class_='counter')
+                        if counter:
+                            value = counter.get_text(strip=True)
+                            # 单位可能在counter后面
+                            unit = counter.next_sibling
+                            unit = unit.strip() if unit and isinstance(unit, str) else ''
+                            traffic_info['remaining'] = f"{value}{unit}"
+
+                # 提取今日已用
+                stats = card.find('div', class_='card-stats')
+                if stats:
+                    stats_title = stats.find('div', class_='card-stats-title')
+                    if stats_title:
+                        # 尝试直接找li中的文本
+                        li = stats_title.find('li', class_='breadcrumb-item active')
+                        if li:
+                            text = li.get_text(strip=True)
+                            if '今日已用' in text:
+                                # 提取数值和单位
+                                parts = text.split('：')[-1].split(':')[-1].strip()
+                                traffic_info['used_today'] = parts
+                        else:
+                            # 如果没有li，直接从stats_title取文本
+                            text = stats_title.get_text(strip=True)
+                            if '今日已用' in text:
+                                parts = text.split('：')[-1].split(':')[-1].strip()
+                                traffic_info['used_today'] = parts
+
         try:
             # 方法1: 尝试Base64解码
             base64_match = re.search(r'var originBody = "([^"]+)"', html_content)
@@ -241,18 +268,18 @@ class ikuuu():
                     extract_from_soup(soup_decoded)
                 except Exception as e:
                     print(f"Base64解码失败: {e}")
-            
+
             # 如果解码后未找到所需信息，再从原始HTML中提取
             if traffic_info['remaining'] == '未知' or traffic_info['used_today'] == '0B':
                 soup_orig = BeautifulSoup(html_content, 'html.parser')
                 extract_from_soup(soup_orig)
-            
+
             # 方法2: 正则提取今日已用（作为后备）
             if traffic_info['used_today'] == '0B':
                 used_match = re.search(r'今日已用[:：]\s*([\d.]+)\s*([KMGTP]?B)', html_content, re.IGNORECASE)
                 if used_match:
                     traffic_info['used_today'] = used_match.group(1) + used_match.group(2)
-            
+
             # 提取总流量（可选）
             total_match = re.search(r'([\d.]+\s*GB)\s*/\s*([\d.]+\s*GB)', html_content)
             if total_match:
@@ -261,10 +288,10 @@ class ikuuu():
                 total_match2 = re.search(r'总计[:：]\s*([\d.]+\s*[KMGTP]?B)', html_content, re.IGNORECASE)
                 if total_match2:
                     traffic_info['total'] = total_match2.group(1)
-                    
+
         except Exception as e:
             print(f"提取流量信息失败：{str(e)}")
-        
+
         return traffic_info
     
     def get_user_info(self):
