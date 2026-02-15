@@ -211,67 +211,64 @@ class ikuuu():
             'total': '未知'
         }
         
+        def extract_from_soup(soup):
+            """从BeautifulSoup对象中提取卡片中的流量信息"""
+            # 查找所有卡片
+            card_headers = soup.find_all('div', class_='card-header')
+            for header in card_headers:
+                header_text = header.get_text()
+                card = header.find_parent('div', class_='card')
+                if not card:
+                    continue
+                counter = card.find('span', class_='counter')
+                if not counter:
+                    continue
+                value = counter.get_text().strip()
+                if '剩余流量' in header_text:
+                    traffic_info['remaining'] = value  # 直接使用，通常包含单位
+                elif '今日已用' in header_text:
+                    traffic_info['used_today'] = value
+                # 可扩展其他流量项
+        
         try:
-            # 方法1: 检查是否有Base64编码的内容（参考2方法）
+            # 方法1: 尝试Base64解码
             base64_match = re.search(r'var originBody = "([^"]+)"', html_content)
             if base64_match:
                 try:
                     base64_content = base64_match.group(1)
-                    decoded_content = base64.b64decode(base64_content).decode('utf-8')
-                    
-                    # 使用解码后的内容解析
-                    soup = BeautifulSoup(decoded_content, 'html.parser')
-                    
-                    # 查找剩余流量
-                    flow_cards = soup.find_all('div', class_='card card-statistic-2')
-                    for card in flow_cards:
-                        h4_tag = card.find('h4')
-                        if h4_tag and '剩余流量' in h4_tag.text:
-                            counter_span = card.find('span', class_='counter')
-                            if counter_span:
-                                flow_value = counter_span.text.strip()
-                                next_sibling = counter_span.next_sibling
-                                unit_text = next_sibling.strip() if next_sibling else ""
-                                traffic_info['remaining'] = f"{flow_value}{unit_text}"
+                    decoded = base64.b64decode(base64_content).decode('utf-8')
+                    soup_decoded = BeautifulSoup(decoded, 'html.parser')
+                    extract_from_soup(soup_decoded)
                 except Exception as e:
                     print(f"Base64解码失败: {e}")
             
-            # 方法2: 直接解析HTML（参考1方法）
-            if traffic_info['remaining'] == '未知':
-                soup = BeautifulSoup(html_content, 'html.parser')
-                
-                # 查找剩余流量
-                card_headers = soup.find_all('div', class_='card-header')
-                for header in card_headers:
-                    if '剩余流量' in header.get_text():
-                        card = header.find_parent('div', class_='card')
-                        if card:
-                            counter = card.find('span', class_='counter')
-                            if counter:
-                                traffic_info['remaining'] = counter.get_text().strip() + " GB"
+            # 如果解码后未找到所需信息，再从原始HTML中提取
+            if traffic_info['remaining'] == '未知' or traffic_info['used_today'] == '0B':
+                soup_orig = BeautifulSoup(html_content, 'html.parser')
+                extract_from_soup(soup_orig)
             
-            # 查找今日已用流量（使用正则表达式）
-            used_match = re.search(r'今日已用[:：]\s*([0-9.]+\s*[BKMGT]?B)', html_content, re.IGNORECASE)
-            if used_match:
-                traffic_info['used_today'] = used_match.group(1).strip()
+            # 方法2: 正则提取今日已用（作为后备）
+            if traffic_info['used_today'] == '0B':
+                used_match = re.search(r'今日已用[:：]\s*([\d.]+)\s*([KMGTP]?B)', html_content, re.IGNORECASE)
+                if used_match:
+                    traffic_info['used_today'] = used_match.group(1) + used_match.group(2)
             
-            # 查找总流量
-            total_match = re.search(r'([0-9.]+\s*GB)\s*/\s*([0-9.]+\s*GB)', html_content)
+            # 提取总流量（可选）
+            total_match = re.search(r'([\d.]+\s*GB)\s*/\s*([\d.]+\s*GB)', html_content)
             if total_match:
                 traffic_info['total'] = total_match.group(2)
             else:
-                # 尝试其他格式
-                total_match2 = re.search(r'总计[:：]\s*([0-9.]+\s*[BKMGT]?B)', html_content, re.IGNORECASE)
+                total_match2 = re.search(r'总计[:：]\s*([\d.]+\s*[KMGTP]?B)', html_content, re.IGNORECASE)
                 if total_match2:
-                    traffic_info['total'] = total_match2.group(1).strip()
-            
+                    traffic_info['total'] = total_match2.group(1)
+                    
         except Exception as e:
             print(f"提取流量信息失败：{str(e)}")
         
         return traffic_info
     
     def get_user_info(self):
-        """获取用户信息"""
+        """获取用户信息（用户名和流量）"""
         user_url = f'https://{self.base_host}/user'
         
         try:
@@ -281,9 +278,25 @@ class ikuuu():
             
             # 解析用户名
             soup = BeautifulSoup(user_res.text, 'html.parser')
-            name_elem = soup.find('span', {'class': 'navbar-brand'}) or soup.find('div', {'class': 'd-sm-none d-lg-inline-block'})
-            if name_elem:
-                self.username = name_elem.text.strip()
+            # 优先查找包含用户名的div
+            name_div = soup.find('div', class_='d-sm-none d-lg-inline-block')
+            if name_div:
+                name_text = name_div.get_text(strip=True)
+                # 去除 "Hi, " 前缀
+                if name_text.startswith('Hi,'):
+                    self.username = name_text.replace('Hi,', '').strip()
+                else:
+                    self.username = name_text
+                print(f"✅ 成功获取用户名：{self.username}")
+            else:
+                # 备选：查找navbar-brand
+                name_elem = soup.find('span', class_='navbar-brand')
+                if name_elem:
+                    self.username = name_elem.text.strip()
+                    print(f"✅ 成功获取用户名（备选）：{self.username}")
+                else:
+                    print("⚠️ 未找到用户名标签，使用邮箱作为用户名")
+                    self.username = self.email
             
             # 获取流量信息
             traffic_info = self.get_traffic_info(user_res.text)
@@ -303,22 +316,13 @@ class ikuuu():
             print(self.msg)
             return self.msg
         
-        # 获取用户信息和流量
-        success, traffic_info, _ = self.get_user_info()
-        
-        if not success:
-            self.msg = f"[登录]：{self.username}\n[签到]：获取用户信息失败\n\n"
-            print(self.msg)
-            return self.msg
-        
         # 执行签到
         sign_url = f'https://{self.base_host}/user/checkin'
-        
+        sign_result = ""
         try:
             time.sleep(random.uniform(1, 2))
             sign_res = self.session.post(sign_url, timeout=15, verify=False)
             sign_res.raise_for_status()
-            
             # 解析签到结果
             try:
                 sign_json = sign_res.json()
@@ -330,24 +334,24 @@ class ikuuu():
                     sign_result = f"未知结果: {sign_json.get('msg', '无信息')}"
             except:
                 sign_result = "响应解析失败"
-            
-            # 构建完整的消息
-            self.msg = f"[登录账号]：{self.username}  \n"
-            self.msg += f"[签到状态]：{sign_result}  \n"
-            self.msg += f"[剩余流量]：{traffic_info['remaining']}  \n"
-            self.msg += f"[今日已用]：{traffic_info['used_today']}  \n"
-            if traffic_info['total'] != '未知':
-                self.msg += f"[总流量]：{traffic_info['total']}  \n"
-            self.msg += f"[当前域名]：{self.base_host}\n"
-            
         except Exception as e:
-            self.msg = f"[登录账号]：{self.username}\n"
-            self.msg += f"[签到状态]：请求失败 {str(e)}\n"
-            self.msg += f"[剩余流量]：{traffic_info['remaining']}\n"
-            self.msg += f"[今日已用]：{traffic_info['used_today']}\n"
-            if traffic_info['total'] != '未知':
-                self.msg += f"[总流量]：{traffic_info['total']}\n"
-            self.msg += f"[当前域名]：{self.base_host}\n"
+            sign_result = f"请求失败 {str(e)}"
+        
+        # 获取用户信息和流量（签到后的最新信息）
+        success, traffic_info, _ = self.get_user_info()
+        
+        if not success:
+            # 如果获取用户信息失败，但签到可能成功，使用默认值
+            traffic_info = {'remaining': '未知', 'used_today': '未知', 'total': '未知'}
+        
+        # 构建完整的消息（使用Markdown换行：两个空格+换行）
+        self.msg = f"[登录账号]：{self.username}  \n"
+        self.msg += f"[签到状态]：{sign_result}  \n"
+        self.msg += f"[剩余流量]：{traffic_info['remaining']}  \n"
+        self.msg += f"[今日已用]：{traffic_info['used_today']}  \n"
+        if traffic_info['total'] != '未知':
+            self.msg += f"[总流量]：{traffic_info['total']}  \n"
+        self.msg += f"[当前域名]：{self.base_host}\n"
         
         print(self.msg)
         return self.msg
