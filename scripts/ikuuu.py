@@ -24,7 +24,7 @@ if not all([USER_EMAIL, USER_PASSWORD]):
 
 # 初始域名和备用域名
 IKUUU_HOST = "ikuuu.nl"
-BACKUP_HOSTS = ["ikuuu.de","ikuuu.one", "ikuuu.pw", "ikuuu.me", "ikuuu.club", "ikuuu.vip", "ikuuu.fyi"]
+BACKUP_HOSTS = ["ikuuu.de","ikuuu.one", "ikuuu.pw", "ikuuu.me", "ikuuu.club", "ikuuu.vip", "ikuuu.fyi","ikuuu.win"]
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 class DomainManager:
